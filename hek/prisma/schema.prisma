@@ -1,0 +1,197 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  walletAddress       String?   @unique
+  reputationScore     Float     @default(0)
+  totalEarnings       Float     @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relations
+  createdTasks        Task[]    @relation("TaskCreator")
+  contributions       Contribution[]
+  modelNfts           ModelNft[] @relation("ModelCreator")
+  ownedModels         ModelNft[] @relation("ModelOwner")
+  contributorShares   ContributorShare[]
+  purchases           MarketplacePurchase[]
+  reviews             Review[]
+}
+
+model Task {
+  id              String    @id @default(cuid())
+  title           String
+  description     String
+  datasetUri      String
+  targetAccuracy  Float
+  currentAccuracy Float     @default(0)
+  rewardPool      Float
+  status          TaskStatus @default(PENDING)
+  creatorId       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  creator         User      @relation("TaskCreator", fields: [creatorId], references: [id])
+  contributions   Contribution[]
+  modelNfts       ModelNft[]
+  trainingRounds  TrainingRound[]
+}
+
+model Contribution {
+  id              String    @id @default(cuid())
+  taskId          String
+  contributorId   String
+  roundNumber     Int
+  improvementBp   Float     // Basis points improvement
+  modelUpdateUri  String    // IPFS URI for model update
+  rewardAmount    Float?
+  status          ContributionStatus @default(PENDING)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  task            Task      @relation(fields: [taskId], references: [id])
+  contributor     User      @relation(fields: [contributorId], references: [id])
+}
+
+model TrainingRound {
+  id              String    @id @default(cuid())
+  taskId          String
+  roundNumber     Int
+  globalAccuracy  Float
+  participantCount Int
+  status          RoundStatus @default(ACTIVE)
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  
+  // Relations
+  task            Task      @relation(fields: [taskId], references: [id])
+}
+
+model ModelNft {
+  id              String    @id @default(cuid())
+  tokenId         String    @unique // Blockchain token ID
+  taskId          String
+  name            String
+  description     String
+  modelType       String
+  accuracy        Float
+  trainingRounds  Int
+  ipfsUri         String    // Model weights IPFS URI
+  metadataUri     String    // NFT metadata URI
+  creatorId       String
+  currentOwnerId  String
+  price           Float?
+  isListed        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  task            Task      @relation(fields: [taskId], references: [id])
+  creator         User      @relation("ModelCreator", fields: [creatorId], references: [id])
+  currentOwner    User      @relation("ModelOwner", fields: [currentOwnerId], references: [id])
+  listings        MarketplaceListing[]
+  purchases       MarketplacePurchase[]
+  reviews         Review[]
+  contributorShares ContributorShare[]
+}
+
+model ContributorShare {
+  id              String    @id @default(cuid())
+  modelNftId      String
+  contributorId   String
+  sharePercentage Float     // Percentage of royalties
+  totalEarned     Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  modelNft        ModelNft  @relation(fields: [modelNftId], references: [id])
+  contributor     User      @relation(fields: [contributorId], references: [id])
+}
+
+model MarketplaceListing {
+  id              String    @id @default(cuid())
+  modelNftId      String
+  sellerId        String
+  price           Float
+  status          ListingStatus @default(ACTIVE)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  modelNft        ModelNft  @relation(fields: [modelNftId], references: [id])
+  purchases       MarketplacePurchase[]
+}
+
+model MarketplacePurchase {
+  id              String    @id @default(cuid())
+  listingId       String
+  modelNftId      String
+  buyerId         String
+  price           Float
+  platformFee     Float
+  royaltyAmount   Float
+  transactionHash String?
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  listing         MarketplaceListing @relation(fields: [listingId], references: [id])
+  buyer           User      @relation(fields: [buyerId], references: [id])
+  modelNft        ModelNft  @relation(fields: [modelNftId], references: [id])
+}
+
+model Review {
+  id              String    @id @default(cuid())
+  modelNftId      String
+  reviewerId      String
+  rating          Int       // 1-5 stars
+  comment         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  modelNft        ModelNft  @relation(fields: [modelNftId], references: [id])
+  reviewer        User      @relation(fields: [reviewerId], references: [id])
+}
+
+enum TaskStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ContributionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RoundStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+}
